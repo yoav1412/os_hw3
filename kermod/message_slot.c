@@ -17,8 +17,16 @@ static int device_open( struct inode* inode,
     printk("device_open: fileminor = %d\n", file_minor);
     if (messageSlots == NULL){
         if ( (messageSlots = (MessageSlot*) kmalloc(sizeof(MessageSlot), GFP_KERNEL)) == NULL ) {
+            printk("device_open : RET1\n"); //todo rm
+            printk("device_open : mem allocation error.\n");
             return FAILURE;
         };
+        messageSlots->minor = file_minor;
+        if ( (messageSlots->messages = (Message*) kmalloc(sizeof(Message), GFP_KERNEL)) == NULL ) {
+            printk("device_open : mem allocation error.\n");
+            return FAILURE;
+        };
+        printk("device_open : RET2\n");//todo rm
         return SUCCESS;
     }
 
@@ -26,48 +34,63 @@ static int device_open( struct inode* inode,
     MessageSlot* listBasePointer = messageSlots;
     MessageSlot* prv;
     while (messageSlots != NULL) {
-        messageSlots++;
         if (messageSlots->minor == file_minor){ //i.e, a MsgSlot already exists for this minor.
+            printk("device_open : RET3\n");//todo rm
             return SUCCESS;
         }
         prv = messageSlots;
         messageSlots = messageSlots->next;
     }
     if ( (prv->next = (MessageSlot*) kmalloc(sizeof(MessageSlot), GFP_KERNEL)) == NULL ) {
+        printk("device_open : RET4\n");//todo rm
+        printk("device_open : mem allocation error.\n");
         return FAILURE;
     };
+    prv->next->minor = file_minor;
+    if ( (prv->next->messages = (Message*) kmalloc(sizeof(Message), GFP_KERNEL)) == NULL ) {
+        printk("device_open : mem allocation error.\n");
+        return FAILURE;
+    };
+
+
     messageSlots = listBasePointer;
+    printk("device_open : SUCCESS\n");
     return SUCCESS;
 }
 
-static ssize_t device_read( struct file* file, char __user* buffer, size_t length, loff_t* offset){
 
+static ssize_t device_read(struct filr* filr, char__user* buffer, size_t length, loff_t* offset){
     printk("Invoking device_read(doing nothing) \n");
     return -1;
 }
 
 
-static ssize_t device_write( struct file* file, const char __user* buffer,size_t length, loff_t* offset){
-
+static ssize_t device_wrtie(struct file* file, const char__user* buffer, size_t length, loff_t* offset){
     int channel_to_write = (int) file->private_data;
     int file_minor = iminor(file->f_inode);
-    printk("Invoking device_write, file_minor = %d, currChannel = %d\n", file_minor, current_channel);
-
-
+    printk("Invoking device_write, file_minor = %d, channel_to_write = %d\n", file_minor, channel_to_write);
+    printk("DEBUG:: in devie_write: messageSlots->minor=%d\n", messageSlots->minor);
     MessageSlot *curr = messageSlots;
-    while ((curr->minor != file_minor) && curr != NULL){
+    printk("DEBUG:: in devie_write (before 1st loop): curr->next=%p | curr->minor=%d\n", curr->next, curr->minor);
+    while (curr != NULL && (curr->minor != file_minor) ){
+        printk("device_write: entered loop \n");
         curr = curr->next;
+        printk("device_write: curr = %p \n", curr);
     }
-    if (curr==NULL) {
+    if (curr == NULL) {
         printk("Error in device_write: no such file created\n");
         return FAILURE;
     }
 
     Message *messages_on_file = curr->messages;
-    while ((messages_on_file->channel != channel_to_write) && messages_on_file!=NULL) {
+    while ((messages_on_file->channel != channel_to_write) && (messages_on_file!=NULL)) {
         messages_on_file = messages_on_file->next;
     }
     if (messages_on_file==NULL) {
+        printk("Error in device_write.\n");
+        return FAILURE;
+    }
+    if (strcpy(messages_on_file->content, buffer) == NULL){
         printk("Error in device_write.\n");
         return FAILURE;
     }
@@ -111,7 +134,7 @@ static int __init myinit(void){
     // Negative values signify an error
     if(rv < 0)
     {
-        printk( KERN_ALERT "%s registraion failed for  %d\n", DEVICE_FILE_NAME, majorNmber );
+        printk( KERN_ALERT "%s registraion failed for  %d\n", DEVICE_FILE_NAME, majorNmber);
         return majorNmber;
     }
 
@@ -120,13 +143,9 @@ static int __init myinit(void){
     return 0;
 }
 
-static void __exit module_cleanup(void)
-{
-    // Unregister the device:
+static void __exit module_cleanup(){
     unregister_chrdev(majorNmber, DEVICE_FILE_NAME);
 }
-
-
 
 
 module_init(myinit);
