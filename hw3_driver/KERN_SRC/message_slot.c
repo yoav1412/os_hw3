@@ -68,7 +68,7 @@ static int device_open( struct inode* inode,
     return SUCCESS;
 }
 
-
+//TODO: percise error handling (see exercise)
 static ssize_t device_read(struct file* file, char __user* buffer, size_t length, loff_t* offset){
     int channel_to_read = (int) file->private_data;
     int file_minor = iminor(file->f_inode);
@@ -82,6 +82,10 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
         return -EINVAL;
     }
     Message *messages_on_file = curr->messages;
+    if (messages_on_file == NULL) {
+        //Error, channel was never set:
+        return -EINVAL;
+        }
     Message *prv;
     while ((messages_on_file!=NULL) && (messages_on_file->channel != channel_to_read)) {
         prv = messages_on_file;
@@ -89,16 +93,19 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
     }
     printk("device_read: **messages_on_file=%p\n", messages_on_file);
     if (messages_on_file == NULL) {
-    	//Error, trying to read from channel that wasn't written to:
-    	return -EINVAL;
+    	//Error, trying to read from channel that wasn't written to (no message exists on channel):
+    	return -EWOULDBLOCK;
     }
     // Here, messages_on_file points to correct message-channel in correct file:
-    int i;
-    for (i = 0; i < length && i < MAX_MSG_LEN; i++ )
-    {
-      put_user(messages_on_file->content[i], &buffer[i]);//TODO: check success?
+
+    if (length < strlen(messages_on_file->content)) {//provided buff is too small to hold message.
+    	return -ENOSPC;
     }
-    return SUCCESS;
+    int i;
+    for (i = 0; i < length && i < MAX_MSG_LEN; i++ ){
+    	if ( put_user(messages_on_file->content[i], &buffer[i]) != 0){ return FAILURE; }
+    }
+    return i+1; //return num of bytes read;
 }
 
 
@@ -158,7 +165,7 @@ static ssize_t device_write(struct file* file, const char __user* buffer, size_t
 		}
 		ptr = ptr->next;
 	}
-    return SUCCESS;
+	return i+1; //return num of bytes written;
 }
 
 static long device_ioctl( struct   file* file,
@@ -191,14 +198,13 @@ struct file_operations Fops =
 
 
 static int __init myinit(void){
-    // Register driver capabilities. Obtain major num
     int rv = register_chrdev( majorNmber, DEVICE_FILE_NAME, &Fops );
-    // chekc for err:
     if(rv < 0)
     {
         printk( KERN_ALERT "%s registration failed for  %d\n", DEVICE_FILE_NAME, majorNmber);
         return majorNmber;
     }
+    printk(KERN_INFO "message_slot: registered major number %d\n", majorNmber);
     return 0;
 }
 
