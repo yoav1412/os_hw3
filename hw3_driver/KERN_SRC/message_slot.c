@@ -21,7 +21,8 @@ static int device_open( struct inode* inode, struct file*  file ){
         messageSlots->messages = NULL;
         return SUCCESS;
     }
-    MessageSlot* listBasePointer = messageSlots;
+    MessageSlot* listBasePointer;
+    listBasePointer = messageSlots;
     MessageSlot* prv;
     while (messageSlots != NULL) {
         if (messageSlots->minor == file_minor){ //i.e, a MsgSlot already exists for this minor.
@@ -45,8 +46,11 @@ static int device_open( struct inode* inode, struct file*  file ){
 static ssize_t device_read(struct file* file, char __user* buffer, size_t length, loff_t* offset){
     int channel_to_read = (int) file->private_data;
     int file_minor = iminor(file->f_inode);
+    MessageSlot *curr;
+    Message *messages_on_file;
+    Message *prv;
     if ( length <= 0 || length > MAX_MSG_LEN ) { return -EINVAL; }
-    MessageSlot *curr = messageSlots;
+    curr = messageSlots;
     while (curr != NULL && (curr->minor != file_minor) ){
         curr = curr->next;
     }
@@ -54,12 +58,12 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
     	// Error, trying to read form file that has no msgSlot:
         return -EINVAL;
     }
-    Message *messages_on_file = curr->messages;
+    messages_on_file = curr->messages;
     if (messages_on_file == NULL) {
         //Error, channel was never set:
         return -EINVAL;
         }
-    Message *prv;
+
     while ((messages_on_file!=NULL) && (messages_on_file->channel != channel_to_read)) {
         prv = messages_on_file;
     	messages_on_file = messages_on_file->next;
@@ -79,10 +83,15 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
 
 
 static ssize_t device_write(struct file* file, const char __user* buffer, size_t length, loff_t* offset){
-    int channel_to_write = (int) file->private_data;
+    int *channel_pointer = file->private_data;
+    int channel_to_write = *channel_pointer;
     int file_minor = iminor(file->f_inode);
+    MessageSlot *curr;
+    Message *messages_on_file;
+    Message *prv = NULL;
     if ( length <= 0 || length > MAX_MSG_LEN ) { return -EINVAL; }
-    MessageSlot *curr = messageSlots;
+
+    curr = messageSlots;
     while (curr != NULL && (curr->minor != file_minor) ){
         curr = curr->next;
     }
@@ -90,9 +99,7 @@ static ssize_t device_write(struct file* file, const char __user* buffer, size_t
     	//Error, tried to write to a file that wasn't opened:
         return -EINVAL;
     }
-
-    Message *messages_on_file = curr->messages;
-    Message *prv = NULL;
+    messages_on_file = curr->messages;
     while ((messages_on_file!=NULL) && (messages_on_file->channel != channel_to_write)) {
         prv = messages_on_file;
     	messages_on_file = messages_on_file->next;
