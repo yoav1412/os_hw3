@@ -11,6 +11,8 @@ MessageSlot *messageSlots = NULL;
 
 static int device_open( struct inode* inode, struct file*  file ){
     int file_minor = iminor(inode);
+    MessageSlot* listBasePointer;
+    MessageSlot* prv;
     if (messageSlots == NULL){
         if ( (messageSlots = (MessageSlot*) kmalloc(sizeof(MessageSlot), GFP_KERNEL)) == NULL ) {
             return -ENOMEM;
@@ -21,9 +23,7 @@ static int device_open( struct inode* inode, struct file*  file ){
         messageSlots->messages = NULL;
         return SUCCESS;
     }
-    MessageSlot* listBasePointer;
     listBasePointer = messageSlots;
-    MessageSlot* prv;
     while (messageSlots != NULL) {
         if (messageSlots->minor == file_minor){ //i.e, a MsgSlot already exists for this minor.
         	messageSlots = listBasePointer;
@@ -83,8 +83,7 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
 
 
 static ssize_t device_write(struct file* file, const char __user* buffer, size_t length, loff_t* offset){
-    int *channel_pointer = file->private_data;
-    int channel_to_write = *channel_pointer;
+    int channel_to_write = (int) (uintptr_t) file->private_data;
     int file_minor = iminor(file->f_inode);
     MessageSlot *curr;
     Message *messages_on_file;
@@ -111,6 +110,7 @@ static ssize_t device_write(struct file* file, const char __user* buffer, size_t
     	};
     	messages_on_file->next = NULL;
     	messages_on_file->channel = channel_to_write;
+    	printk("device_write:: channel to write = %d\n",channel_to_write);
     	if (prv != NULL){
     	//i.e, there were other channels existing in file before current write, need to link them to newly allocated channel:
     		prv->next = messages_on_file;
