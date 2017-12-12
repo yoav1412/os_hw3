@@ -44,7 +44,7 @@ static int device_open( struct inode* inode, struct file*  file ){
 }
 
 static ssize_t device_read(struct file* file, char __user* buffer, size_t length, loff_t* offset){
-    int channel_to_read = (int) file->private_data;
+    int channel_to_read = (int) (uintptr_t) file->private_data;
     int file_minor = iminor(file->f_inode);
     MessageSlot *curr;
     Message *messages_on_file;
