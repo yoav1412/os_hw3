@@ -14,8 +14,6 @@
 #define MSG_SLOT_CHANNEL_CMND 1
 #define MAX_MSG_LEN 128
 
-//todo: the chmod 777 in the flow..?
-
 int main(int argc, char** argv){
     if (argc != 3){
     	printf("Reader status: failed (invalid arguments).\n");

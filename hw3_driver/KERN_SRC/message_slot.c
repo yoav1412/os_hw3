@@ -5,19 +5,12 @@
 #include "message_slot.h"
 
 // device major number:
-static int majorNmber = MAJOR_NUM; //TODO change
+static int majorNmber = MAJOR_NUM;
 MessageSlot *messageSlots = NULL;
 
-//TODO: need to check validity of buff. waiting forum..
 
-
-
-static int device_open( struct inode* inode,
-                        struct file*  file )
-{
-
+static int device_open( struct inode* inode, struct file*  file ){
     int file_minor = iminor(inode);
-    printk("device_open: minor = %d",file_minor); //todo rm
     if (messageSlots == NULL){
         if ( (messageSlots = (MessageSlot*) kmalloc(sizeof(MessageSlot), GFP_KERNEL)) == NULL ) {
             return -ENOMEM;
@@ -46,29 +39,9 @@ static int device_open( struct inode* inode,
     prv->next->next = NULL;
     prv->next->messages = NULL;
     messageSlots = listBasePointer;
-
-
-    //TODO: following is only for dbg,. rm:
-    MessageSlot *ptr = messageSlots;
-    Message *messages;
-    printk("device_open: CURRENT GLOBAL CONTENT:\n");
-	while (ptr != NULL){
-		messages = ptr->messages;
-		while (messages != NULL){
-			int chnl = messages->channel;
-			char *cont = messages->content;
-			int minor = ptr->minor;
-			printk("minor: %d | channel: %d | content: %s\n", minor, chnl, cont);
-			messages = messages->next;
-
-		}
-		ptr = ptr->next;
-	}
-
     return SUCCESS;
 }
 
-//TODO: percise error handling (see exercise)
 static ssize_t device_read(struct file* file, char __user* buffer, size_t length, loff_t* offset){
     int channel_to_read = (int) file->private_data;
     int file_minor = iminor(file->f_inode);
@@ -91,7 +64,6 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
         prv = messages_on_file;
     	messages_on_file = messages_on_file->next;
     }
-    printk("device_read: **messages_on_file=%p\n", messages_on_file);
     if (messages_on_file == NULL) {
     	//Error, trying to read from channel that wasn't written to (no message exists on channel):
     	return -EWOULDBLOCK;
@@ -101,11 +73,8 @@ static ssize_t device_read(struct file* file, char __user* buffer, size_t length
     if (length < strlen(messages_on_file->content)) {//provided buff is too small to hold message.
     	return -ENOSPC;
     }
-    int i;
-    for (i = 0; i < length && i < MAX_MSG_LEN; i++ ){
-    	if ( put_user(messages_on_file->content[i], &buffer[i]) != 0){ return FAILURE; }
-    }
-    return i+1; //return num of bytes read;
+    if ( copy_to_user(buffer, messages_on_file->content, strlen(messages_on_file->content) + 1) != 0 ) { return FAILURE; }
+    return length; //return num of bytes read;
 }
 
 
@@ -144,28 +113,8 @@ static ssize_t device_write(struct file* file, const char __user* buffer, size_t
     	}
     }
     // Here, messages_on_file points to correct message-channel in correct file:
-    int i;
-    for (i = 0; i <= length && i <= MAX_MSG_LEN; i++ )
-    {
-      get_user(messages_on_file->content[i], &buffer[i]);//TODO: check success?
-    }
-
-    //TODO: following is only for dbg,. rm:
-    MessageSlot *ptr = messageSlots;
-    Message *messages;
-    printk("device_write: CURRENT GLOBAL CONTENT:\n");
-	while (ptr != NULL){
-		messages = ptr->messages;
-		while (messages != NULL){
-			int chnl = messages->channel;
-			char *cont = messages->content;
-			int minor = ptr->minor;
-			printk("minor: %d | channel: %d | content: %s\n", minor, chnl, cont);
-			messages = messages->next;
-		}
-		ptr = ptr->next;
-	}
-	return i+1; //return num of bytes written;
+    if ( copy_from_user(messages_on_file->content, buffer, length) != 0 ) { return FAILURE; }
+	return length; //return num of bytes written;
 }
 
 static long device_ioctl( struct   file* file,

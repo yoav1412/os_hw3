@@ -36,9 +36,8 @@ int main(int argc, char** argv){
         printf("Writer status: failed.\n");
         return FAILURE;
     }
-    if ( write(fd, message, strlen(message) * sizeof(char)) < 0){
+    if ( write(fd, message, strlen(message) * sizeof(char)+1) < 0){
     	printf("Writer status: failed.\n");
-    	printf("errno = %d\b", errno);//todo rm
     	return FAILURE;
     }
     if (close(fd) == -1){
